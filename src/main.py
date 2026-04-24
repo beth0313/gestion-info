@@ -1,22 +1,50 @@
 ﻿from service import UserService
+from file import load_data, save_data
+from menu import show_menu
 
 def main():
     service = UserService()
+    data = load_data()
+    service.load_initial_data(data)
 
-    try:
-        service.create_user("1", "Elizabeth", "eli@mail.com")
-        service.create_user("2", "Juan", "juan@mail.com")
+    while True:
+        option = show_menu()
 
-        # Prueba de duplicado
-        service.create_user("1", "Pedro", "pedro@mail.com")
+        try:
+            if option == "1":
+                user_id = input("ID: ")
+                name = input("Nombre: ")
+                email = input("Email: ")
 
-    except ValueError as e:
-        print("Error:", e)
+                service.create_user(user_id, name, email)
+                save_data(service.list_users())
 
-    print("\nLista de usuarios:")
-    for user in service.list_users():
-        print(user)
+            elif option == "2":
+                for u in service.list_users():
+                    print(u)
 
+            elif option == "3":
+                user_id = input("ID a actualizar: ")
+                name = input("Nuevo nombre: ")
+                email = input("Nuevo email: ")
+
+                service.update_user(user_id, name, email)
+                save_data(service.list_users())
+
+            elif option == "4":
+                user_id = input("ID a eliminar: ")
+
+                service.delete_user(user_id)
+                save_data(service.list_users())
+
+            elif option == "5":
+                break
+
+            else:
+                print("Opción inválida")
+
+        except ValueError as e:
+            print("Error:", e)
 
 if __name__ == "__main__":
     main()
