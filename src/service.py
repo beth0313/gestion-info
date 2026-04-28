@@ -11,7 +11,7 @@ class UserService:
         self.ids = {u["id"] for u in data}
         self.emails = {u["email"] for u in data}
 
-    def create_user(self, user_id, name, email):
+    def new_register(self, user_id, name, email):
         validate_id(user_id, self.ids)
         validate_name(name)
         validate_email(email, self.emails)
@@ -26,14 +26,17 @@ class UserService:
         self.ids.add(user_id)
         self.emails.add(email)
 
-    def list_users(self):
-        return self.users
+    def list_records(self):
+        # Uso de lambda para ordenar por ID
+        return sorted(self.users, key=lambda x: x["id"])
 
-    def get_user(self, user_id):
-        return next((u for u in self.users if u["id"] == user_id), None)
+    def search_record(self, user_id):
+        # Uso de list comprehension para buscar
+        matching = [u for u in self.users if u["id"] == user_id]
+        return matching[0] if matching else None
 
-    def update_user(self, user_id, name=None, email=None):
-        user = self.get_user(user_id)
+    def update_record(self, user_id, name=None, email=None):
+        user = self.search_record(user_id)
         if not user:
             raise ValueError("Usuario no encontrado")
 
@@ -48,8 +51,8 @@ class UserService:
                 self.emails.add(email)
                 user["email"] = email
 
-    def delete_user(self, user_id):
-        user = self.get_user(user_id)
+    def delete_record(self, user_id):
+        user = self.search_record(user_id)
         if not user:
             raise ValueError("Usuario no encontrado")
 
