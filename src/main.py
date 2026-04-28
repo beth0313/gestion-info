@@ -16,11 +16,11 @@ def main():
                 name = input("Nombre: ")
                 email = input("Email: ")
 
-                service.create_user(user_id, name, email)
-                save_data(service.list_users())
+                service.new_register(user_id, name, email)
+                save_data(service.list_records())
 
             elif option == "2":
-                for u in service.list_users():
+                for u in service.list_records():
                     print(u)
 
             elif option == "3":
@@ -28,14 +28,14 @@ def main():
                 name = input("Nuevo nombre: ")
                 email = input("Nuevo email: ")
 
-                service.update_user(user_id, name, email)
-                save_data(service.list_users())
+                service.update_record(user_id, name, email)
+                save_data(service.list_records())
 
             elif option == "4":
                 user_id = input("ID a eliminar: ")
 
-                service.delete_user(user_id)
-                save_data(service.list_users())
+                service.delete_record(user_id)
+                save_data(service.list_records())
 
             elif option == "5":
                 break
