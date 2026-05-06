@@ -1,119 +1,135 @@
 """
-integration.py — Modulo 5: Integracion con pandas
+integration.py — Modulo 5/6: Integracion con pandas.
 
-Funcionalidades:
-- Exportar registros a CSV
-- Generar reporte estadistico en consola
-- Filtrar/ordenar registros con DataFrame
+Responsabilidad: transformar la lista de usuarios en estructuras
+de pandas para exportar, filtrar y generar reportes.
+No contiene logica de negocio ni interaccion con el usuario.
 
 Uso de *args / **kwargs:
-- build_dataframe(*fields)    : elige que columnas incluir en el DataFrame
-- filter_records(df, **crit)  : filtra por cualquier campo dinamicamente
-- export_csv(*fields, **opts) : combina ambos y delega opciones a pandas
+  build_dataframe(*fields, records=...)  -- columnas a incluir
+  filter_records(df, **criteria)         -- criterios de busqueda dinamicos
+  export_csv(records, *fields, **kwargs) -- opciones de pandas.to_csv
 """
+
+import os
+from datetime import datetime
+from typing import Any, Optional
 
 import pandas as pd
 import pandas.api.types as pat
-import os
-from datetime import datetime
 
-EXPORT_PATH = "data/reporte_usuarios.csv"
+# Ruta de salida por defecto (relativa a src/)
+_DEFAULT_EXPORT = "data/reporte_usuarios.csv"
+
+UserDict = dict[str, Any]
 
 
-def build_dataframe(*fields, records=None):
+def build_dataframe(*fields: str, records: Optional[list[UserDict]] = None) -> pd.DataFrame:
     """
-    Construye un DataFrame a partir de los registros.
+    Construye un DataFrame a partir de la lista de usuarios.
 
-    *fields : columnas a incluir ("id", "name", "email").
-              Si se omite, incluye todas las columnas disponibles.
-    records : lista de dicts con los datos de usuarios.
+    Args:
+        *fields:  Nombres de columnas a conservar. Si se omite, incluye todas.
+        records:  Lista de dicts con datos de usuarios.
 
-    Retorna un pd.DataFrame.
+    Returns:
+        DataFrame con los registros. Vacio si records es None o [].
     """
-    if records is None:
-        records = []
-
     if not records:
         return pd.DataFrame()
 
     df = pd.DataFrame(records)
 
     if fields:
-        cols_validas = [f for f in fields if f in df.columns]
-        if cols_validas:
-            df = df[cols_validas]
+        valid = [f for f in fields if f in df.columns]
+        if valid:
+            df = df[valid]
 
     return df
 
 
-def filter_records(df, **criteria):
+def filter_records(df: pd.DataFrame, **criteria: str) -> pd.DataFrame:
     """
-    Filtra un DataFrame segun criterios clave-valor.
+    Filtra un DataFrame por coincidencias de subcadena (case-insensitive).
 
-    **criteria : pares campo=valor para filtrar.
-                 Ejemplo: filter_records(df, name="ana")
+    Args:
+        df:         DataFrame de entrada.
+        **criteria: Pares campo=valor. Se aplican todos (AND logico).
+                    Ejemplo: filter_records(df, name="ana", email="gmail")
 
-    Retorna un DataFrame filtrado (insensible a mayusculas para strings).
+    Returns:
+        DataFrame filtrado. Devuelve el original vacio si df ya es vacio.
     """
     if df.empty:
         return df
 
     result = df.copy()
-
-    for campo, valor in criteria.items():
-        if campo not in result.columns:
-            print(f"  [!] Campo '{campo}' no existe, se ignora.")
+    for field, value in criteria.items():
+        if field not in result.columns:
+            print(f"  [!] Campo '{field}' no existe, se ignora.")
             continue
-
-        # Compatibilidad con pandas StringDtype y object
-        if pat.is_string_dtype(result[campo]):
-            result = result[
-                result[campo].astype(str).str.lower().str.contains(
-                    str(valor).lower(), na=False, regex=False
-                )
-            ]
+        # pat.is_string_dtype cubre tanto 'object' como pandas StringDtype
+        if pat.is_string_dtype(result[field]):
+            mask = (
+                result[field]
+                .astype(str)
+                .str.lower()
+                .str.contains(str(value).lower(), na=False, regex=False)
+            )
+            result = result[mask]
         else:
-            result = result[result[campo] == valor]
+            result = result[result[field] == value]
 
     return result
 
 
-def export_csv(records, *fields, filepath=EXPORT_PATH, **kwargs):
+def export_csv(
+    records: list[UserDict],
+    *fields: str,
+    filepath: str = _DEFAULT_EXPORT,
+    **kwargs: Any,
+) -> Optional[str]:
     """
-    Exporta los registros a un archivo CSV.
+    Exporta registros a un archivo CSV.
 
-    records  : lista de dicts con usuarios.
-    *fields  : columnas a incluir (vacio = todas).
-    filepath : ruta de salida del CSV.
-    **kwargs : opciones extra para pandas to_csv()
-               Ej: sep=";", index=False
+    Args:
+        records:   Lista de usuarios a exportar.
+        *fields:   Columnas a incluir (vacio = todas).
+        filepath:  Ruta del CSV resultante.
+        **kwargs:  Opciones extra para pandas.DataFrame.to_csv()
+                   Ej: sep=";", encoding="utf-16"
+
+    Returns:
+        Ruta absoluta del CSV generado, o None si no hay registros.
     """
     if not records:
         print("  No hay registros para exportar.")
         return None
 
     df = build_dataframe(*fields, records=records)
+    parent = os.path.dirname(filepath)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
 
-    directorio = os.path.dirname(filepath)
-    if directorio:
-        os.makedirs(directorio, exist_ok=True)
+    opts: dict[str, Any] = {"index": False, "encoding": "utf-8"}
+    opts.update(kwargs)
+    df.to_csv(filepath, **opts)
 
-    csv_opts = {"index": False, "encoding": "utf-8"}
-    csv_opts.update(kwargs)
-
-    df.to_csv(filepath, **csv_opts)
-
-    print(f"  Exportado -> {os.path.abspath(filepath)}")
+    abs_path = os.path.abspath(filepath)
+    print(f"  Exportado -> {abs_path}")
     print(f"  Registros: {len(df)}  |  Columnas: {list(df.columns)}")
-    return filepath
+    return abs_path
 
 
-def generate_report(records):
+def generate_report(records: list[UserDict]) -> None:
     """
-    Genera un reporte en consola con estadisticas basicas:
-    - Total de registros
-    - Dominios de email mas frecuentes
-    - Tabla ordenada por ID
+    Muestra en consola un reporte estadistico de los usuarios.
+
+    Incluye: total de registros, dominios de email mas frecuentes
+    y tabla ordenada por ID.
+
+    Args:
+        records: Lista de usuarios.
     """
     if not records:
         print("  No hay registros para reportar.")
@@ -128,37 +144,40 @@ def generate_report(records):
     print(f"\n  Total de registros: {len(df)}")
 
     if "email" in df.columns:
-        df = df.copy()
-        df["dominio"] = df["email"].astype(str).str.split("@").str[-1]
-        conteo = df["dominio"].value_counts()
+        work = df.copy()
+        work["dominio"] = work["email"].astype(str).str.split("@").str[-1]
+        freq = work["dominio"].value_counts()
         print("\n  Dominios mas frecuentes:")
-        for dominio, cuenta in conteo.items():
-            print(f"    {dominio:<30} {cuenta} usuario(s)")
+        for domain, count in freq.items():
+            print(f"    {domain:<30} {count} usuario(s)")
 
     print("\n  Tabla (ordenada por ID):")
-    df_sorted = df.sort_values("id").reset_index(drop=True)
-    cols = [c for c in ["id", "name", "email"] if c in df_sorted.columns]
-    print(df_sorted[cols].to_string(index=False))
+    sorted_df = df.sort_values("id").reset_index(drop=True)
+    visible = [c for c in ["id", "name", "email"] if c in sorted_df.columns]
+    print(sorted_df[visible].to_string(index=False))
     print("=" * 50)
 
 
-def search_and_display(records, **criteria):
+def search_and_display(records: list[UserDict], **criteria: str) -> None:
     """
-    Filtra registros con **kwargs y muestra el resultado en consola.
+    Filtra registros con **criteria y muestra el resultado en consola.
 
-    Ejemplo: search_and_display(records, name="ana")
-             search_and_display(records, email="gmail")
+    Args:
+        records:    Lista de usuarios.
+        **criteria: Pares campo=valor a buscar.
+                    Ejemplo: search_and_display(records, email="gmail")
     """
     if not records:
         print("  No hay registros disponibles.")
         return
 
     df = build_dataframe(records=records)
-    resultado = filter_records(df, **criteria)
+    result = filter_records(df, **criteria)
 
-    if resultado.empty:
+    if result.empty:
         print("  No se encontraron registros con ese criterio.")
-    else:
-        print(f"\n  Resultados ({len(resultado)} encontrado(s)):")
-        cols = [c for c in ["id", "name", "email"] if c in resultado.columns]
-        print(resultado[cols].to_string(index=False))
+        return
+
+    print(f"\n  Resultados ({len(result)} encontrado(s)):")
+    visible = [c for c in ["id", "name", "email"] if c in result.columns]
+    print(result[visible].to_string(index=False))
